@@ -138,9 +138,9 @@ async function subirImagen(){
 async function guardarProblema(){
 
   if(!marcadorSeleccionado){
-    alert("Selecciona ubicación en el mapa");
-    return;
-  }
+  // ubicación por defecto (Río Turbio aprox)
+  marcadorSeleccionado = L.marker([-51.53, -72.30]).addTo(map);
+}
 
   let foto = await subirImagen();
 
