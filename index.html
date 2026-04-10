@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MapaMape</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background:#fafafa;
+}
+
+/* HEADER */
+header{
+  position:sticky;
+  top:0;
+  background:white;
+  padding:10px;
+  text-align:center;
+  font-weight:bold;
+  border-bottom:1px solid #ddd;
+}
+
+/* PERFIL */
+#perfil{
+  position:fixed;
+  top:60px;
+  left:10px;
+  background:white;
+  padding:10px;
+  border-radius:10px;
+  z-index:1000;
+}
+
+/* FEED */
+#feed{
+  max-width:500px;
+  margin:auto;
+}
+
+/* POST */
+.post{
+  background:white;
+  margin:10px;
+  border-radius:10px;
+  overflow:hidden;
+}
+
+/* IMG */
+.post img{
+  width:100%;
+  height:300px;
+  object-fit:cover;
+}
+
+/* CONTENT */
+.content{
+  padding:10px;
+}
+
+/* BOTONES */
+button{
+  cursor:pointer;
+}
+
+/* FAB */
+.fab{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  background:#ff5722;
+  color:white;
+  border:none;
+  padding:15px;
+  border-radius:50%;
+  font-size:20px;
+}
+
+/* FORM */
+#formulario{
+  position:fixed;
+  bottom:0;
+  width:100%;
+  background:white;
+  padding:15px;
+  display:none;
+}
+</style>
+</head>
+
+<body>
+
+<header>🔥 MapaMape</header>
+
+<div id="perfil"></div>
+
+<button onclick="loginGoogle()">🔐 Login</button>
+<button onclick="logout()">Salir</button>
+
+<div id="feed"></div>
+
+<button class="fab" onclick="abrirFormulario()">➕</button>
+
+<!-- FORMULARIO -->
+<div id="formulario">
+
+<input id="titulo" placeholder="Título"><br><br>
+
+<textarea id="descripcion" placeholder="Descripción"></textarea><br><br>
+
+<input type="file" id="imagen"><br><br>
+
+<label>
+<input type="checkbox" id="anonimo">
+Publicar anónimo
+</label><br><br>
+
+<button onclick="guardarProblema()">Publicar</button>
+<button onclick="cerrarFormulario()">Cancelar</button>
+
+</div>
+
+<script>
+
+// 🔥 CONFIGURAR FIREBASE
+const firebaseConfig = {
+  apiKey: "TU_API_KEY",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  databaseURL: "https://TU_PROYECTO-default-rtdb.firebaseio.com",
+  projectId: "TU_PROYECTO"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const db = firebase.database();
+const auth = firebase.auth();
+
+// 👤 LOGIN GOOGLE
+function loginGoogle(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+
+  auth.signInWithPopup(provider).then(res => {
+
+    const u = res.user;
+
+    localStorage.setItem("usuario", JSON.stringify({
+      nombre: u.displayName,
+      foto: u.photoURL,
+      email: u.email,
+      reputacion: 0
+    }));
+
+    cargarPerfil();
+  });
+}
+
+// 🚪 LOGOUT
+function logout(){
+  auth.signOut();
+  localStorage.removeItem("usuario");
+  location.reload();
+}
+
+// 👤 PERFIL
+function obtenerUsuario(){
+  return JSON.parse(localStorage.getItem("usuario"));
+}
+
+function cargarPerfil(){
+  const u = obtenerUsuario();
+  if(!u) return;
+
+  document.getElementById("perfil").innerHTML = `
+    <img src="${u.foto}" width="40" style="border-radius:50%"><br>
+    ${u.nombre}<br>
+    ⭐ ${u.reputacion}
+  `;
+}
+
+// 📸 SUBIR IMG (imgBB)
+async function subirImagen(){
+  const file = document.getElementById("imagen").files[0];
+  if(!file) return "";
+
+  let form = new FormData();
+  form.append("image", file);
+
+  let res = await fetch("https://api.imgbb.com/1/upload?key=TU_API_IMGBB", {
+    method:"POST",
+    body:form
+  });
+
+  let data = await res.json();
+  return data.data.url;
+}
+
+// 📝 PUBLICAR
+async function guardarProblema(){
+
+  let user = obtenerUsuario() || {nombre:"Vecino"};
+
+  let foto = await subirImagen();
+
+  db.ref("problemas").push({
+    titulo: titulo.value,
+    descripcion: descripcion.value,
+    votos:0,
+    foto:foto,
+    usuario:user.nombre,
+    anonimo: anonimo.checked,
+    fecha:new Date().toISOString()
+  });
+
+  cerrarFormulario();
+}
+
+// 👍 VOTAR
+function votar(id){
+  let ref = db.ref("problemas/"+id+"/votos");
+  ref.transaction(v => (v||0)+1);
+}
+
+// 💬 COMENTAR
+function comentar(id,texto){
+  if(!texto) return;
+
+  db.ref("problemas/"+id+"/comentarios").push({
+    texto:texto,
+    fecha:new Date().toISOString()
+  });
+}
+
+// 🧠 FEED
+db.ref("problemas").on("value", snap => {
+
+  let feed = document.getElementById("feed");
+  feed.innerHTML="";
+
+  let lista=[];
+
+  snap.forEach(c=>{
+    let d=c.val();
+    d.id=c.key;
+    lista.push(d);
+  });
+
+  lista.sort((a,b)=> (b.votos||0)-(a.votos||0));
+
+  lista.forEach(d=>{
+
+    let nombre = d.anonimo ? "Anónimo" : d.usuario;
+
+    let div = document.createElement("div");
+    div.className="post";
+
+    div.innerHTML=`
+      <img src="${d.foto || 'https://via.placeholder.com/400'}">
+
+      <div class="content">
+        <b>${nombre}</b><br>
+        ${d.titulo}<br>
+        <small>${d.descripcion}</small><br><br>
+
+        👍 ${d.votos||0}
+        <button onclick="votar('${d.id}')">👍</button>
+
+        <br><br>
+
+        <input placeholder="Comentar..."
+        onkeypress="if(event.key==='Enter') comentar('${d.id}', this.value)">
+      </div>
+    `;
+
+    feed.appendChild(div);
+  });
+
+});
+
+// UI
+function abrirFormulario(){ formulario.style.display="block"; }
+function cerrarFormulario(){ formulario.style.display="none"; }
+
+// INIT
+cargarPerfil();
+
+</script>
+
+</body>
+</html>
