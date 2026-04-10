@@ -8,89 +8,55 @@
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <style>
-body{
-  margin:0;
-  font-family:Arial;
-  background:#fafafa;
-}
-
-/* HEADER */
+body{margin:0;font-family:Arial;background:#fafafa;}
 header{
-  position:sticky;
-  top:0;
-  background:white;
-  padding:10px;
-  text-align:center;
-  font-weight:bold;
-  border-bottom:1px solid #ddd;
+  position:sticky;top:0;background:white;padding:10px;text-align:center;
+  font-weight:bold;border-bottom:1px solid #ddd;
 }
 
 /* PERFIL */
 #perfil{
-  position:fixed;
-  top:60px;
-  left:10px;
-  background:white;
-  padding:10px;
-  border-radius:10px;
-  z-index:1000;
+  position:fixed;top:60px;left:10px;background:white;
+  padding:10px;border-radius:10px;z-index:1000;
+}
+
+/* MAPA */
+#map{
+  height:250px;
 }
 
 /* FEED */
-#feed{
-  max-width:500px;
-  margin:auto;
-}
+#feed{max-width:500px;margin:auto;}
 
-/* POST */
 .post{
-  background:white;
-  margin:10px;
-  border-radius:10px;
-  overflow:hidden;
+  background:white;margin:10px;border-radius:12px;
+  overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.1);
 }
 
-/* IMG */
-.post img{
-  width:100%;
-  height:300px;
-  object-fit:cover;
+.post img{width:100%;height:250px;object-fit:cover;}
+
+.content{padding:10px;}
+
+.actions{
+  display:flex;justify-content:space-between;margin-top:10px;
 }
 
-/* CONTENT */
-.content{
-  padding:10px;
-}
-
-/* BOTONES */
-button{
-  cursor:pointer;
-}
-
-/* FAB */
 .fab{
-  position:fixed;
-  bottom:20px;
-  right:20px;
-  background:#ff5722;
-  color:white;
-  border:none;
-  padding:15px;
-  border-radius:50%;
-  font-size:20px;
+  position:fixed;bottom:20px;right:20px;
+  background:#ff5722;color:white;border:none;
+  padding:15px;border-radius:50%;font-size:20px;
 }
 
 /* FORM */
 #formulario{
-  position:fixed;
-  bottom:0;
-  width:100%;
-  background:white;
-  padding:15px;
-  display:none;
+  position:fixed;bottom:0;width:100%;
+  background:white;padding:15px;display:none;
 }
 </style>
 </head>
@@ -99,22 +65,17 @@ button{
 
 <header>🔥 MapaMape</header>
 
-<div id="perfil"></div>
-
-<button onclick="loginGoogle()">🔐 Login</button>
-<button onclick="logout()">Salir</button>
+<div id="map"></div>
 
 <div id="feed"></div>
 
 <button class="fab" onclick="abrirFormulario()">➕</button>
 
-<!-- FORMULARIO -->
+<!-- FORM -->
 <div id="formulario">
 
 <input id="titulo" placeholder="Título"><br><br>
-
 <textarea id="descripcion" placeholder="Descripción"></textarea><br><br>
-
 <input type="file" id="imagen"><br><br>
 
 <label>
@@ -129,7 +90,7 @@ Publicar anónimo
 
 <script>
 
-// 🔥 CONFIGURAR FIREBASE
+// 🔥 CONFIG FIREBASE
 const firebaseConfig = {
   apiKey: "TU_API_KEY",
   authDomain: "TU_PROYECTO.firebaseapp.com",
@@ -138,63 +99,35 @@ const firebaseConfig = {
 };
 
 firebase.initializeApp(firebaseConfig);
-
 const db = firebase.database();
-const auth = firebase.auth();
 
-// 👤 LOGIN GOOGLE
-function loginGoogle(){
-  const provider = new firebase.auth.GoogleAuthProvider();
+// 📍 MAPA
+let map = L.map('map').setView([-51.53, -72.30], 13);
 
-  auth.signInWithPopup(provider).then(res => {
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'© OpenStreetMap'
+}).addTo(map);
 
-    const u = res.user;
+let marcadorSeleccionado;
 
-    localStorage.setItem("usuario", JSON.stringify({
-      nombre: u.displayName,
-      foto: u.photoURL,
-      email: u.email,
-      reputacion: 0
-    }));
+map.on('click', function(e){
+  if(marcadorSeleccionado){
+    map.removeLayer(marcadorSeleccionado);
+  }
 
-    cargarPerfil();
-  });
-}
+  marcadorSeleccionado = L.marker(e.latlng).addTo(map);
+});
 
-// 🚪 LOGOUT
-function logout(){
-  auth.signOut();
-  localStorage.removeItem("usuario");
-  location.reload();
-}
-
-// 👤 PERFIL
-function obtenerUsuario(){
-  return JSON.parse(localStorage.getItem("usuario"));
-}
-
-function cargarPerfil(){
-  const u = obtenerUsuario();
-  if(!u) return;
-
-  document.getElementById("perfil").innerHTML = `
-    <img src="${u.foto}" width="40" style="border-radius:50%"><br>
-    ${u.nombre}<br>
-    ⭐ ${u.reputacion}
-  `;
-}
-
-// 📸 SUBIR IMG (imgBB)
+// 📸 IMG
 async function subirImagen(){
-  const file = document.getElementById("imagen").files[0];
+  const file = imagen.files[0];
   if(!file) return "";
 
   let form = new FormData();
   form.append("image", file);
 
-  let res = await fetch("https://api.imgbb.com/1/upload?key=TU_API_IMGBB", {
-    method:"POST",
-    body:form
+  let res = await fetch("https://api.imgbb.com/1/upload?key=TU_API_IMGBB",{
+    method:"POST", body:form
   });
 
   let data = await res.json();
@@ -204,7 +137,10 @@ async function subirImagen(){
 // 📝 PUBLICAR
 async function guardarProblema(){
 
-  let user = obtenerUsuario() || {nombre:"Vecino"};
+  if(!marcadorSeleccionado){
+    alert("Selecciona ubicación en el mapa");
+    return;
+  }
 
   let foto = await subirImagen();
 
@@ -213,8 +149,9 @@ async function guardarProblema(){
     descripcion: descripcion.value,
     votos:0,
     foto:foto,
-    usuario:user.nombre,
     anonimo: anonimo.checked,
+    lat: marcadorSeleccionado.getLatLng().lat,
+    lng: marcadorSeleccionado.getLatLng().lng,
     fecha:new Date().toISOString()
   });
 
@@ -223,8 +160,8 @@ async function guardarProblema(){
 
 // 👍 VOTAR
 function votar(id){
-  let ref = db.ref("problemas/"+id+"/votos");
-  ref.transaction(v => (v||0)+1);
+  db.ref("problemas/"+id+"/votos")
+  .transaction(v => (v||0)+1);
 }
 
 // 💬 COMENTAR
@@ -232,16 +169,19 @@ function comentar(id,texto){
   if(!texto) return;
 
   db.ref("problemas/"+id+"/comentarios").push({
-    texto:texto,
-    fecha:new Date().toISOString()
+    texto:texto
   });
 }
 
-// 🧠 FEED
+// 🧠 FEED + MAPA
 db.ref("problemas").on("value", snap => {
 
   let feed = document.getElementById("feed");
   feed.innerHTML="";
+
+  map.eachLayer(l=>{
+    if(l instanceof L.Marker) map.removeLayer(l);
+  });
 
   let lista=[];
 
@@ -255,23 +195,34 @@ db.ref("problemas").on("value", snap => {
 
   lista.forEach(d=>{
 
-    let nombre = d.anonimo ? "Anónimo" : d.usuario;
+    // MAPA
+    let m = L.marker([d.lat, d.lng]).addTo(map);
+    m.bindPopup(d.titulo);
 
-    let div = document.createElement("div");
+    // FEED
+    let div=document.createElement("div");
     div.className="post";
 
     div.innerHTML=`
       <img src="${d.foto || 'https://via.placeholder.com/400'}">
 
       <div class="content">
-        <b>${nombre}</b><br>
+        <b>${d.anonimo ? "Anónimo" : "Usuario"}</b><br>
         ${d.titulo}<br>
-        <small>${d.descripcion}</small><br><br>
+        <small>${d.descripcion}</small>
 
-        👍 ${d.votos||0}
-        <button onclick="votar('${d.id}')">👍</button>
+        <div class="actions">
+          <div>
+            👍 ${d.votos||0}
+            <button onclick="votar('${d.id}')">👍</button>
+          </div>
 
-        <br><br>
+          <button onclick="map.setView([${d.lat},${d.lng}],17)">
+            📍 Ver
+          </button>
+        </div>
+
+        <br>
 
         <input placeholder="Comentar..."
         onkeypress="if(event.key==='Enter') comentar('${d.id}', this.value)">
@@ -286,9 +237,6 @@ db.ref("problemas").on("value", snap => {
 // UI
 function abrirFormulario(){ formulario.style.display="block"; }
 function cerrarFormulario(){ formulario.style.display="none"; }
-
-// INIT
-cargarPerfil();
 
 </script>
 
